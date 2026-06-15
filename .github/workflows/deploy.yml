@@ -73,21 +73,27 @@ jobs:
 
       - name: Generate image tag
         id: meta
+        env:
+          ECR_REGISTRY: ${{ secrets.ECR_REGISTRY }}
         run: |
-          echo "image_tag=${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${GITHUB_SHA::8}" >> $GITHUB_OUTPUT
-          echo "IMAGE_URI=${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}" >> $GITHUB_OUTPUT
+          echo "image_tag=${ECR_REGISTRY}/multi-agent-research:${GITHUB_SHA::8}" >> $GITHUB_OUTPUT
+          echo "IMAGE_URI=${ECR_REGISTRY}/multi-agent-research" >> $GITHUB_OUTPUT
 
       - name: Build Docker image
+        env:
+          ECR_REGISTRY: ${{ secrets.ECR_REGISTRY }}
         run: |
           docker build \
             -t ${{ steps.meta.outputs.image_tag }} \
-            -t ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:latest \
+            -t ${ECR_REGISTRY}/multi-agent-research:latest \
             .
 
       - name: Push Docker image to ECR
+        env:
+          ECR_REGISTRY: ${{ secrets.ECR_REGISTRY }}
         run: |
           docker push ${{ steps.meta.outputs.image_tag }}
-          docker push ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:latest
+          docker push ${ECR_REGISTRY}/multi-agent-research:latest
 
   # ============================================
   # JOB 3: Deploy to EC2
@@ -100,6 +106,8 @@ jobs:
     steps:
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1
+        env:
+          ECR_REGISTRY: ${{ secrets.ECR_REGISTRY }}
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
@@ -111,11 +119,11 @@ jobs:
 
             # Login to ECR
             aws ecr get-login-password --region us-east-1 | \
-              docker login --username AWS --password-stdin ${{ secrets.ECR_REGISTRY }}
+              docker login --username AWS --password-stdin ${ECR_REGISTRY}
 
             # Pull latest image
             echo "===== Pulling new image ====="
-            docker pull ${{ secrets.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:latest
+            docker pull ${ECR_REGISTRY}/multi-agent-research:latest
 
             # Stop old containers (keep database)
             echo "===== Stopping old app ====="

@@ -106,11 +106,15 @@ jobs:
     steps:
       - name: Deploy via SSH
         run: |
-          # Write SSH key to file
+          # Write SSH key to file and decode from base64
           mkdir -p ~/.ssh
-          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
+          echo "${{ secrets.EC2_SSH_KEY }}" | base64 -d > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          sed -i 's/\r$//' ~/.ssh/id_rsa
+          # Verify key format
+          echo "Key header:"
+          head -1 ~/.ssh/id_rsa
+          echo "Key footer:"
+          tail -1 ~/.ssh/id_rsa
 
           # SSH into EC2 and deploy
           ssh -o StrictHostKeyChecking=no \
@@ -176,12 +180,12 @@ jobs:
       - name: Write SSH key to file
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
+          echo "${{ secrets.EC2_SSH_KEY }}" | base64 -d > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          # Remove Windows line endings
-          sed -i 's/\r$//' ~/.ssh/id_rsa
           # Verify key format
+          echo "Key header:"
           head -1 ~/.ssh/id_rsa
+          echo "Key footer:"
           tail -1 ~/.ssh/id_rsa
 
       - name: Test SSH to EC2

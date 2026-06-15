@@ -105,17 +105,17 @@ jobs:
     if: github.ref == 'refs/heads/main'
     steps:
       - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1
-        env:
-          ECR_REGISTRY: ${{ secrets.ECR_REGISTRY }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          SSH_KEY_B64: ${{ secrets.EC2_SSH_KEY }}
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ env.SSH_KEY_B64 }}
-          script: |
+        run: |
+          # Write SSH key to file
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          sed -i 's/\r$//' ~/.ssh/id_rsa
+
+          # SSH into EC2 and deploy
+          ssh -o StrictHostKeyChecking=no \
+              -i ~/.ssh/id_rsa \
+              ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'ENDSSH'
             set -e
             echo "===== Deploy started at $(date) ====="
             pwd
@@ -135,7 +135,7 @@ jobs:
             aws --version
 
             # Login to ECR
-            REGISTRY_DOMAIN=$(echo ${ECR_REGISTRY} | sed 's|https://||')
+            REGISTRY_DOMAIN=$(echo ${{ secrets.ECR_REGISTRY }} | sed 's|https://||')
             echo "Registry: ${REGISTRY_DOMAIN}"
             aws ecr get-login-password --region us-east-1 | \
               docker login --username AWS --password-stdin ${REGISTRY_DOMAIN}
@@ -161,6 +161,7 @@ jobs:
             docker compose ps
             docker compose logs --tail=30 app
             echo "===== Deploy finished at $(date) ====="
+          ENDSSH
 
   # ============================================
   # Manual test workflow (can be triggered on demand)
@@ -169,16 +170,23 @@ jobs:
     name: Test SSH Connection
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Write SSH key to file
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          # Remove Windows line endings
+          sed -i 's/\r$//' ~/.ssh/id_rsa
+          # Verify key format
+          head -1 ~/.ssh/id_rsa
+          tail -1 ~/.ssh/id_rsa
+
       - name: Test SSH to EC2
-        uses: appleboy/ssh-action@v1
-        env:
-          SSH_KEY_B64: ${{ secrets.EC2_SSH_KEY }}
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ env.SSH_KEY_B64 }}
-          script: |
-            echo "SSH connection works!"
-            pwd
-            whoami
-            ls -la ~/
+        run: |
+          ssh -o StrictHostKeyChecking=no \
+              -i ~/.ssh/id_rsa \
+              ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} \
+              "echo 'SSH works!' && pwd && whoami && ls -la ~/"

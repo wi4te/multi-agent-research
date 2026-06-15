@@ -114,8 +114,7 @@ jobs:
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
-          key: |
-            $(echo "$SSH_KEY_B64" | base64 -d)
+          key: ${{ env.SSH_KEY_B64 }}
           script: |
             set -e
             echo "===== Deploy started at $(date) ====="
@@ -177,8 +176,7 @@ jobs:
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
-          key: |
-            $(echo "$SSH_KEY_B64" | base64 -d)
+          key: ${{ env.SSH_KEY_B64 }}
           script: |
             echo "SSH connection works!"
             pwd

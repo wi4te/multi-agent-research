@@ -108,6 +108,8 @@ jobs:
         uses: appleboy/ssh-action@v1
         env:
           ECR_REGISTRY: ${{ secrets.ECR_REGISTRY }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
@@ -117,13 +119,22 @@ jobs:
             echo "===== Starting deployment ====="
             cd ~/multi_agent_research
 
+            # Install AWS CLI if not present
+            if ! command -v aws &> /dev/null; then
+              echo "Installing AWS CLI..."
+              sudo apt-get update -qq
+              sudo apt-get install -y -qq awscli > /dev/null
+            fi
+
             # Login to ECR
+            REGISTRY_DOMAIN=$(echo ${ECR_REGISTRY} | sed 's|https://||')
+            echo "Registry: ${REGISTRY_DOMAIN}"
             aws ecr get-login-password --region us-east-1 | \
-              docker login --username AWS --password-stdin ${ECR_REGISTRY}
+              docker login --username AWS --password-stdin ${REGISTRY_DOMAIN}
 
             # Pull latest image
             echo "===== Pulling new image ====="
-            docker pull ${ECR_REGISTRY}/multi-agent-research:latest
+            docker pull ${REGISTRY_DOMAIN}/multi-agent-research:latest
 
             # Stop old containers (keep database)
             echo "===== Stopping old app ====="

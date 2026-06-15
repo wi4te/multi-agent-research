@@ -116,15 +116,22 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             set -e
-            echo "===== Starting deployment ====="
-            cd ~/multi_agent_research
+            echo "===== Deploy started at $(date) ====="
+            pwd
+            whoami
+            docker --version
 
-            # Install AWS CLI if not present
+            cd ~/multi_agent_research
+            ls -la
+
+            # Install AWS CLI if not present (simple approach)
             if ! command -v aws &> /dev/null; then
               echo "Installing AWS CLI..."
-              sudo apt-get update -qq
-              sudo apt-get install -y -qq awscli > /dev/null
+              sudo apt-get update -qq 2>&1 | tail -5
+              sudo apt-get install -y awscli 2>&1 | tail -5
             fi
+
+            aws --version
 
             # Login to ECR
             REGISTRY_DOMAIN=$(echo ${ECR_REGISTRY} | sed 's|https://||')
@@ -136,14 +143,14 @@ jobs:
             echo "===== Pulling new image ====="
             docker pull ${REGISTRY_DOMAIN}/multi-agent-research:latest
 
-            # Stop old containers (keep database)
+            # Stop old containers
             echo "===== Stopping old app ====="
-            docker compose stop app || true
-            docker compose rm -f app || true
+            docker compose stop app 2>&1 || echo "No app to stop"
+            docker compose rm -f app 2>&1 || echo "No app to remove"
 
             # Start new containers
             echo "===== Starting new app ====="
-            docker compose up -d app
+            docker compose up -d app 2>&1
 
             # Cleanup
             docker image prune -f
@@ -151,4 +158,24 @@ jobs:
             # Show status
             echo "===== Deployment complete ====="
             docker compose ps
-            docker compose logs --tail=20 app
+            docker compose logs --tail=30 app
+            echo "===== Deploy finished at $(date) ====="
+
+  # ============================================
+  # Manual test workflow (can be triggered on demand)
+  # ============================================
+  test-ssh:
+    name: Test SSH Connection
+    runs-on: ubuntu-latest
+    steps:
+      - name: Test SSH to EC2
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            echo "SSH connection works!"
+            pwd
+            whoami
+            ls -la ~/

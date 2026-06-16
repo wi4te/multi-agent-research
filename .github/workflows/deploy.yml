@@ -106,15 +106,27 @@ jobs:
       - name: Setup SSH key
         run: |
           mkdir -p ~/.ssh
-          # Decode base64 key and write to file
-          echo "${{ secrets.EC2_SSH_KEY }}" | base64 -d > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
-          # Remove any Windows line endings
-          sed -i 's/\r$//' ~/.ssh/deploy_key
-          # Verify key
+          python3 -c "
+          import os, sys
+          key = os.environ['SSH_KEY_RAW']
+          # Strip any trailing/leading whitespace
+          key = key.strip()
+          with open(os.path.expanduser('~/.ssh/deploy_key'), 'w', newline='\n') as f:
+              f.write(key)
+              if not key.endswith('\n'):
+                  f.write('\n')
+          os.chmod(os.path.expanduser('~/.ssh/deploy_key'), 0o600)
+          print('Key written successfully')
+          "
+        env:
+          SSH_KEY_RAW: ${{ secrets.EC2_SSH_KEY }}
+
+      - name: Verify SSH key
+        run: |
           echo "Key file size: $(wc -c < ~/.ssh/deploy_key) bytes"
-          head -1 ~/.ssh/deploy_key | cut -c1-30
-          ssh-keygen -y -f ~/.ssh/deploy_key > /dev/null 2>&1 && echo "Key is valid" || echo "Key is INVALID"
+          echo "First line: $(head -1 ~/.ssh/deploy_key)"
+          echo "Last line: $(tail -1 ~/.ssh/deploy_key)"
+          ssh-keygen -y -f ~/.ssh/deploy_key > /dev/null 2>&1 && echo "Key is VALID" || echo "Key is INVALID - check your secret"
 
       - name: Deploy via SSH
         env:

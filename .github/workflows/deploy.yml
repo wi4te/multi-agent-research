@@ -174,23 +174,24 @@ jobs:
     name: Test SSH Connection
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
       - name: Write SSH key to file
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.EC2_SSH_KEY }}" | base64 -d > ~/.ssh/id_rsa
+          # Write base64 to file first, then decode
+          printf '%s' "${{ secrets.EC2_SSH_KEY }}" > /tmp/key.b64
+          base64 -d /tmp/key.b64 > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
           # Verify key format
           echo "Key header:"
           head -1 ~/.ssh/id_rsa
           echo "Key footer:"
           tail -1 ~/.ssh/id_rsa
+          echo "Key file size:"
+          wc -c ~/.ssh/id_rsa
 
       - name: Test SSH to EC2
         run: |
-          ssh -o StrictHostKeyChecking=no \
+          ssh -v -o StrictHostKeyChecking=no \
               -i ~/.ssh/id_rsa \
               ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} \
               "echo 'SSH works!' && pwd && whoami && ls -la ~/"

@@ -124,9 +124,9 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         run: |
           ssh -o StrictHostKeyChecking=no \
-              ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'ENDSSH'
+              ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} "bash -s" << EOF
             set -e
-            echo "===== Deploy started at $(date) ====="
+            echo "===== Deploy started at \$(date) ====="
             pwd
             whoami
             docker --version
@@ -134,26 +134,22 @@ jobs:
             cd ~/multi_agent_research
             ls -la
 
-            # Install AWS CLI if not present
-            if ! command -v aws &> /dev/null; then
-              echo "Installing AWS CLI..."
-              sudo apt-get update -qq 2>&1 | tail -5
-              sudo apt-get install -y awscli 2>&1 | tail -5
-            fi
+            # Set AWS credentials
+            export AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID}"
+            export AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY}"
+            export AWS_DEFAULT_REGION=us-east-1
 
             aws --version
 
             # Login to ECR
-            export AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID}"
-            export AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY}"
-            REGISTRY_DOMAIN=$(echo "${ECR_REGISTRY}" | sed 's|https://||')
-            echo "Registry: ${REGISTRY_DOMAIN}"
+            REGISTRY_DOMAIN="${ECR_REGISTRY}"
+            echo "Registry: \${REGISTRY_DOMAIN}"
             aws ecr get-login-password --region us-east-1 | \
-              docker login --username AWS --password-stdin ${REGISTRY_DOMAIN}
+              docker login --username AWS --password-stdin \${REGISTRY_DOMAIN}
 
             # Pull latest image
             echo "===== Pulling new image ====="
-            docker pull ${REGISTRY_DOMAIN}/multi-agent-research:latest
+            docker pull \${REGISTRY_DOMAIN}/multi-agent-research:latest
 
             # Stop old containers
             echo "===== Stopping old app ====="
@@ -171,5 +167,5 @@ jobs:
             echo "===== Deployment complete ====="
             docker compose ps
             docker compose logs --tail=30 app
-            echo "===== Deploy finished at $(date) ====="
-          ENDSSH
+            echo "===== Deploy finished at \$(date) ====="
+          EOF

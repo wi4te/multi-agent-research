@@ -106,27 +106,58 @@ jobs:
       - name: Setup SSH key
         run: |
           mkdir -p ~/.ssh
-          python3 -c "
-          import os, sys
-          key = os.environ['SSH_KEY_RAW']
-          # Strip any trailing/leading whitespace
-          key = key.strip()
-          with open(os.path.expanduser('~/.ssh/deploy_key'), 'w', newline='\n') as f:
-              f.write(key)
-              if not key.endswith('\n'):
+          python3 << 'PYEOF'
+          import os, base64
+
+          # Get base64 key from environment
+          key_b64 = os.environ['SSH_KEY_B64'].strip()
+
+          # Decode base64 to get the raw PEM key
+          key_pem = base64.b64decode(key_b64).decode('utf-8')
+
+          # Write to file with Unix line endings
+          key_path = os.path.expanduser('~/.ssh/deploy_key')
+          with open(key_path, 'w', newline='\n') as f:
+              f.write(key_pem)
+              if not key_pem.endswith('\n'):
                   f.write('\n')
-          os.chmod(os.path.expanduser('~/.ssh/deploy_key'), 0o600)
-          print('Key written successfully')
-          "
+
+          # Set permissions
+          os.chmod(key_path, 0o600)
+
+          print(f"Key written: {os.path.getsize(key_path)} bytes")
+          print(f"First line: {key_pem.splitlines()[0]}")
+          print(f"Last line: {key_pem.splitlines()[-1]}")
+          PYEOF
         env:
-          SSH_KEY_RAW: ${{ secrets.EC2_SSH_KEY }}
+          SSH_KEY_B64: ${{ secrets.EC2_SSH_KEY }}
 
       - name: Verify SSH key
         run: |
-          echo "Key file size: $(wc -c < ~/.ssh/deploy_key) bytes"
-          echo "First line: $(head -1 ~/.ssh/deploy_key)"
-          echo "Last line: $(tail -1 ~/.ssh/deploy_key)"
-          ssh-keygen -y -f ~/.ssh/deploy_key > /dev/null 2>&1 && echo "Key is VALID" || echo "Key is INVALID - check your secret"
+          echo "=== Key file details ==="
+          ls -la ~/.ssh/deploy_key
+          echo ""
+          echo "=== Key file size ==="
+          wc -c ~/.ssh/deploy_key
+          echo ""
+          echo "=== First line ==="
+          head -1 ~/.ssh/deploy_key
+          echo ""
+          echo "=== Last line ==="
+          tail -1 ~/.ssh/deploy_key
+          echo ""
+          echo "=== Key validation ==="
+          ssh-keygen -y -f ~/.ssh/deploy_key > /dev/null 2>&1 && echo "✓ Key is VALID" || echo " Key is INVALID"
+          echo ""
+          echo "=== SSH config check ==="
+          cat ~/.ssh/config 2>/dev/null || echo "No SSH config file"
+
+      - name: Test SSH connection (verbose)
+        run: |
+          ssh -vvv -o StrictHostKeyChecking=no \
+              -i ~/.ssh/deploy_key \
+              ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} \
+              "echo 'SSH works!'" 2>&1 | head -100
 
       - name: Deploy via SSH
         env:
